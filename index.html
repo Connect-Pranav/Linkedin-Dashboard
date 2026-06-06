@@ -1,0 +1,1568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RevOS · Revenue Intelligence Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@400;500;600;700;800;900&family=Jetbrains+Mono:wght@300;400;500&family=Bricolage+Grotesque:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* ══════════════════════════════════════════════
+   DESIGN TOKENS — Liquid Glass × Warm Dark
+══════════════════════════════════════════════ */
+:root {
+  /* Backgrounds */
+  --bg-base:    #1a1208;
+  --bg-mid:     #221a0e;
+  --bg-surface: rgba(255,220,150,0.04);
+
+  /* Glass */
+  --glass-light:  rgba(255,230,180,0.08);
+  --glass-med:    rgba(255,220,150,0.12);
+  --glass-heavy:  rgba(255,210,130,0.16);
+  --glass-border: rgba(255,220,160,0.18);
+  --glass-border2:rgba(255,220,160,0.28);
+  --glass-shine:  rgba(255,240,200,0.22);
+
+  /* Accents */
+  --orange:     #f97316;
+  --orange-l:   #fb923c;
+  --orange-d:   #ea6d0a;
+  --amber:      #f59e0b;
+  --amber-l:    #fbbf24;
+  --green:      #86efac;
+  --green-d:    #4ade80;
+  --rose:       #fda4af;
+  --rose-d:     #f87171;
+  --blue:       #93c5fd;
+  --blue-d:     #60a5fa;
+  --teal:       #5eead4;
+  --purple:     #d8b4fe;
+
+  /* Text */
+  --t1: rgba(255,240,210,0.95);
+  --t2: rgba(255,230,190,0.60);
+  --t3: rgba(255,220,170,0.32);
+  --t4: rgba(255,215,160,0.18);
+
+  /* Misc */
+  --nav-w:  220px;
+  --blur:   blur(24px);
+  --blur-sm:blur(12px);
+  --r:      18px;
+  --r-sm:   12px;
+  --shadow: 0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.3);
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,230,180,0.15);
+}
+
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--t1);
+  font-family: 'Bricolage Grotesque', sans-serif;
+  overflow: hidden;
+  cursor: default;
+}
+
+/* ── AMBIENT BACKGROUND ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background:
+    radial-gradient(ellipse 70% 60% at 10% 10%, rgba(249,115,22,0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 50% at 90% 85%, rgba(245,158,11,0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 40% 35% at 55% 45%, rgba(251,191,36,0.07) 0%, transparent 50%),
+    linear-gradient(145deg, #1a1208 0%, #161008 50%, #120e06 100%);
+  pointer-events: none;
+}
+
+/* Noise grain overlay */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-size: 200px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* ── LAYOUT ── */
+#root { position:relative; z-index:1; display:flex; height:100vh; }
+
+/* ── FULL LABEL SIDENAV ── */
+.sidenav {
+  width: var(--nav-w);
+  height: 100vh;
+  display: flex; flex-direction: column;
+  padding: 20px 12px 20px;
+  background: rgba(20,14,6,0.88);
+  backdrop-filter: var(--blur);
+  border-right: 1px solid var(--glass-border);
+  gap: 3px;
+  flex-shrink: 0;
+  z-index: 20;
+  overflow-y: auto;
+}
+.sidenav::-webkit-scrollbar { width: 0; }
+
+.nav-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 8px 18px;
+  border-bottom: 1px solid var(--glass-border);
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+.nav-logo {
+  width: 38px; height: 38px; border-radius: 12px;
+  background: linear-gradient(135deg, var(--orange), var(--amber));
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Cabinet Grotesk', sans-serif;
+  font-weight: 900; font-size: 16px; color: #fff;
+  box-shadow: 0 4px 16px rgba(249,115,22,0.5);
+  flex-shrink: 0;
+}
+.nav-brand-text { display: flex; flex-direction: column; }
+.nav-brand-name {
+  font-family: 'Cabinet Grotesk', sans-serif;
+  font-size: 15px; font-weight: 800; color: var(--t1);
+  letter-spacing: -0.02em; line-height: 1;
+}
+.nav-brand-sub {
+  font-family: 'Jetbrains Mono', monospace;
+  font-size: 8.5px; color: var(--t3); letter-spacing: .06em;
+  margin-top: 2px;
+}
+
+.nav-section-lbl {
+  font-family: 'Jetbrains Mono', monospace;
+  font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--t3); padding: 12px 10px 5px;
+}
+
+.nav-btn {
+  display: flex; align-items: center; gap: 11px;
+  padding: 10px 12px; border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.34,1.56,0.64,1);
+  border: 1px solid transparent;
+  color: var(--t2);
+  font-size: 13px; font-weight: 600;
+  position: relative;
+  white-space: nowrap;
+}
+.nav-btn:hover {
+  background: var(--glass-light);
+  border-color: var(--glass-border);
+  color: var(--t1);
+}
+.nav-btn.active {
+  background: linear-gradient(135deg, rgba(249,115,22,0.22), rgba(245,158,11,0.12));
+  border-color: rgba(249,115,22,0.35);
+  color: var(--orange-l);
+  box-shadow: 0 4px 16px rgba(249,115,22,0.18);
+}
+.nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+.nav-label { flex: 1; }
+.nav-badge {
+  font-family: 'Jetbrains Mono', monospace;
+  font-size: 8px; padding: 2px 7px; border-radius: 100px;
+  background: rgba(249,115,22,0.18); color: var(--orange-l);
+  border: 1px solid rgba(249,115,22,0.3);
+}
+.nav-badge-teal {
+  background: rgba(94,234,212,0.12); color: var(--teal);
+  border: 1px solid rgba(94,234,212,0.25);
+}
+
+.nav-divider { height: 1px; background: var(--glass-border); margin: 8px 4px; }
+
+@keyframes pulseGlow {
+  0%,100% { box-shadow: 0 0 4px var(--orange); }
+  50%      { box-shadow: 0 0 12px var(--orange), 0 0 20px rgba(249,115,22,0.4); }
+}
+
+.nav-spacer { flex: 1; }
+
+.nav-footer {
+  margin-top: 4px; padding: 12px 10px 0;
+  border-top: 1px solid var(--glass-border);
+  font-family: 'Jetbrains Mono', monospace;
+  font-size: 9px; color: var(--t3); line-height: 1.7;
+}
+.live-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green-d); margin-right: 5px;
+  animation: pulseGlow 2s infinite;
+  box-shadow: 0 0 4px var(--green-d);
+}
+
+/* ── MAIN ── */
+.main {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; min-width: 0;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 28px;
+  background: rgba(26,18,8,0.6);
+  backdrop-filter: var(--blur);
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+  gap: 16px;
+}
+
+.topbar-title {
+  font-family: 'Cabinet Grotesk', sans-serif;
+  font-size: 20px; font-weight: 800;
+  color: var(--t1); letter-spacing: -0.02em;
+  display: flex; align-items: center; gap: 10px;
+}
+.topbar-title .page-icon {
+  width: 32px; height: 32px; border-radius: 10px;
+  background: linear-gradient(135deg, rgba(249,115,22,0.2), rgba(245,158,11,0.1));
+  border: 1px solid rgba(249,115,22,0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+
+.topbar-center {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--glass-light);
+  border: 1px solid var(--glass-border);
+  border-radius: 100px; padding: 5px 8px;
+  backdrop-filter: var(--blur-sm);
+}
+.tbc-item {
+  padding: 5px 14px; border-radius: 100px;
+  font-size: 11px; cursor: pointer; transition: all 0.2s;
+  font-family: 'Jetbrains Mono', monospace; letter-spacing: 0.04em;
+  color: var(--t2);
+}
+.tbc-item.active {
+  background: linear-gradient(135deg, var(--orange), var(--amber));
+  color: #fff; font-weight: 500;
+  box-shadow: 0 2px 12px rgba(249,115,22,0.4);
+}
+.tbc-item:hover:not(.active) { background: var(--glass-med); color: var(--t1); }
+
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.tb-chip {
+  padding: 6px 14px; border-radius: 100px;
+  font-family: 'Jetbrains Mono', monospace;
+  font-size: 10px; letter-spacing: 0.08em;
+  border: 1px solid;
+  font-weight: 500;
+  backdrop-filter: var(--blur-sm);
+}
+.tb-chip-green { background: rgba(134,239,172,0.1); border-color: rgba(134,239,172,0.25); color: var(--green); }
+.tb-chip-orange { background: rgba(249,115,22,0.1); border-color: rgba(249,115,22,0.25); color: var(--orange-l); }
+.tb-chip-amber { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.25); color: var(--amber-l); }
+
+.pulse-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green-d); margin-right: 6px;
+  animation: pulseGlow2 2s infinite;
+}
+@keyframes pulseGlow2 {
+  0%,100% { box-shadow: 0 0 3px var(--green-d); }
+  50%      { box-shadow: 0 0 10px var(--green-d); }
+}
+
+.tb-avatar {
+  width: 36px; height: 36px; border-radius: 12px;
+  background: linear-gradient(135deg, rgba(249,115,22,0.3), rgba(245,158,11,0.2));
+  border: 1px solid rgba(249,115,22,0.35);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Cabinet Grotesk', sans-serif; font-weight: 800; font-size: 13px;
+  color: var(--orange-l);
+  cursor: pointer;
+}
+
+/* ── CONTENT ── */
+.content {
+  flex: 1; overflow-y: auto; padding: 22px 26px;
+}
+.content::-webkit-scrollbar { width: 4px; }
+.content::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 2px; }
+
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── GLASS CARD ── */
+.card {
+  background: var(--glass-light);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-card);
+  position: relative; overflow: hidden;
+  transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), border-color 0.2s, box-shadow 0.2s;
+  animation: cardIn 0.5s cubic-bezier(0.22,1,0.36,1) both;
+}
+.card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent 0%, var(--glass-shine) 50%, transparent 100%);
+  pointer-events: none;
+}
+.card:hover {
+  border-color: var(--glass-border2);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 2px 12px rgba(249,115,22,0.08), inset 0 1px 0 rgba(255,230,180,0.2);
+  transform: translateY(-1px);
+}
+@keyframes cardIn {
+  from { opacity:0; transform: translateY(14px) scale(0.98); }
+  to   { opacity:1; transform: translateY(0) scale(1); }
+}
+
+.card-p   { padding: 22px 24px; }
+.card-p-sm{ padding: 16px 18px; }
+
+/* ── GRIDS ── */
+.g2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.g3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+.g4 { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+.g5 { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; }
+.mb { margin-bottom: 16px; }
+.mb-sm { margin-bottom: 12px; }
+
+/* ── LABELS ── */
+.eyebrow {
+  font-family: 'Jetbrains Mono', monospace;
+  font-size: 9px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--t3);
+  margin-bottom: 10px;
+}
+.card-h {
+  font-family: 'Cabinet Grotesk', sans-serif;
+  font-size: 13px; font-weight: 700;
+  color: var(--t1); margin-bottom: 14px;
+}
+
+/* ── BIG STAT ── */
+.stat-val {
+  font-family: 'Cabinet Grotesk', sans-serif;
+  font-size: 32px; font-weight: 900;
+  letter-spacing: -0.03em; line-height: 1;
+}
+.stat-lbl {
+  font-family: 'Jetbrains Mono', monospace;
+  font-size: 8.5px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--t3);
+  margin-bottom: 8px;
+}
+.stat-sub {
+  font-size: 11px; color: var(--t2); margin-top: 7px;
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'Jetbrains Mono', monospace;
+}
+.delta {
+  padding: 2px 8px; border-radius: 100px; font-size: 9px;
+  font-family: 'Jetbrains Mono', monospace; font-weight: 500;
+}
+.d-up { background: rgba(134,239,172,0.13); color: var(--green); }
+.d-dn { background: rgba(248,113,113,0.13); color: var(--rose-d); }
+.d-warn{ background: rgba(251,191,36,0.13); color: var(--amber-l); }
+
+.track {
+  height: 4px; border-radius: 2px;
+  background: rgba(255,220,150,0.07); margin-top: 12px; overflow: hidden;
+}
+.track-fill {
+  height: 100%; border-radius: 2px;
+  animation: trackGrow 1s cubic-bezier(0.22,1,0.36,1) forwards;
+}
+@keyframes trackGrow { from { width: 0 !important; } }
+
+/* ── PROGRESS BAR ── */
+.prog-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.prog-label { font-size:11px; color:var(--t2); width:110px; flex-shrink:0; }
+.prog-bg { flex:1; height:6px; background:rgba(255,220,150,0.07); border-radius:3px; overflow:hidden; }
+.prog-fg { height:100%; border-radius:3px; }
+.prog-val { font-family:'Jetbrains Mono',monospace; font-size:10px; color:var(--t2); width:36px; text-align:right; }
+
+/* ── TABLE ── */
+.tbl { width:100%; border-collapse:collapse; }
+.tbl th {
+  font-family: 'Jetbrains Mono', monospace;
+  font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--t3); padding-bottom: 10px; text-align: left;
+  border-bottom: 1px solid rgba(255,220,150,0.08);
+}
+.tbl td {
+  padding: 9px 4px; font-size: 12px; color: var(--t2);
+  border-bottom: 1px solid rgba(255,220,150,0.04);
+  transition: color 0.15s;
+}
+.tbl tr:hover td { color: var(--t1); background: rgba(255,220,150,0.03); }
+.tbl td:first-child { color: var(--t1); font-weight: 600; }
+
+/* ── PILL BADGE ── */
+.pill {
+  padding: 3px 9px; border-radius: 100px;
+  font-family: 'Jetbrains Mono', monospace;
+  font-size: 8.5px; font-weight: 500;
+}
+.p-g { background:rgba(134,239,172,0.12); color:var(--green); border:1px solid rgba(134,239,172,0.2); }
+.p-y { background:rgba(251,191,36,0.12); color:var(--amber-l); border:1px solid rgba(251,191,36,0.2); }
+.p-r { background:rgba(248,113,113,0.12); color:var(--rose-d); border:1px solid rgba(248,113,113,0.2); }
+.p-b { background:rgba(147,197,253,0.12); color:var(--blue); border:1px solid rgba(147,197,253,0.2); }
+.p-o { background:rgba(249,115,22,0.12); color:var(--orange-l); border:1px solid rgba(249,115,22,0.2); }
+
+/* ── EXEC DOTS ── */
+.exec-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+.edot {
+  aspect-ratio:1; border-radius:9px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:7.5px; font-family:'Jetbrains Mono',monospace;
+  cursor:default; position:relative;
+  transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s;
+}
+.edot:hover { transform:scale(1.2); z-index:5; }
+.edot .tip {
+  display:none; position:absolute; bottom:calc(100%+6px); left:50%;
+  transform:translateX(-50%);
+  background:rgba(26,18,8,0.95); backdrop-filter:var(--blur-sm);
+  border:1px solid var(--glass-border);
+  padding:6px 9px; border-radius:8px;
+  white-space:nowrap; font-size:9px; color:var(--t1); z-index:30;
+}
+.edot:hover .tip { display:block; }
+.e-g  { background:rgba(134,239,172,0.15); border:1px solid rgba(134,239,172,0.28); color:var(--green); }
+.e-y  { background:rgba(251,191,36,0.14); border:1px solid rgba(251,191,36,0.28); color:var(--amber-l); }
+.e-r  { background:rgba(248,113,113,0.13); border:1px solid rgba(248,113,113,0.25); color:var(--rose-d); }
+
+/* ── FUNNEL BAR ── */
+.f-stage { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+.f-lbl { font-size:11px; color:var(--t2); width:120px; flex-shrink:0; }
+.f-bg { flex:1; height:30px; background:rgba(255,220,150,0.05); border-radius:8px; overflow:hidden; }
+.f-fill {
+  height:100%; border-radius:8px;
+  display:flex; align-items:center; padding-left:12px;
+  font-family:'Jetbrains Mono',monospace; font-size:10px;
+  color:rgba(0,0,0,0.55); font-weight:500;
+}
+.f-pct { font-family:'Jetbrains Mono',monospace; font-size:10.5px; color:var(--t3); width:38px; text-align:right; }
+.f-arrow { text-align:center; font-size:8.5px; color:var(--t3); padding:2px 0 2px 132px; font-family:'Jetbrains Mono',monospace; }
+
+/* ── INSIGHT ITEM ── */
+.iitem { display:flex; gap:11px; padding:11px 0; border-bottom:1px solid rgba(255,220,150,0.05); }
+.iitem:last-child { border-bottom:none; padding-bottom:0; }
+.iicon { width:32px; height:32px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.ih { font-size:12px; font-weight:600; color:var(--t1); line-height:1.35; }
+.is { font-size:9.5px; color:var(--t3); margin-top:2px; font-family:'Jetbrains Mono',monospace; }
+
+/* ── SVG CHARTS ── */
+.chart-area { position:relative; }
+
+/* ── MAP ── */
+#blr-map { height:340px; border-radius:12px; overflow:hidden; }
+.leaflet-container { background:#110d05 !important; }
+.leaflet-popup-content-wrapper {
+  background: rgba(26,18,8,0.95) !important;
+  border: 1px solid rgba(249,115,22,0.3) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
+  color: var(--t1) !important;
+}
+.leaflet-popup-tip { background: rgba(26,18,8,0.95) !important; }
+
+/* ══════════════════════════════════════════════
+   AI AGENT
+══════════════════════════════════════════════ */
+.agent-shell { display:flex; flex-direction:column; height:calc(100vh - 64px - 44px); }
+.agent-header { padding:0 0 14px; flex-shrink:0; }
+.agent-body {
+  flex:1; display:flex; flex-direction:column;
+  background: var(--glass-light);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.agent-body::before {
+  content:'';
+  position:absolute; top:0; left:0; right:0; height:1px;
+  background: linear-gradient(90deg,transparent,var(--glass-shine),transparent);
+}
+.agent-msgs {
+  flex:1; overflow-y:auto; padding:18px;
+  display:flex; flex-direction:column; gap:14px;
+  position: relative;
+}
+.agent-msgs::-webkit-scrollbar { width:3px; }
+.agent-msgs::-webkit-scrollbar-thumb { background:var(--glass-border); }
+
+.msg { display:flex; gap:11px; animation:msgIn 0.3s cubic-bezier(0.22,1,0.36,1); }
+@keyframes msgIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+.msg.user { flex-direction:row-reverse; }
+.msg-av {
+  width:32px; height:32px; border-radius:10px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px; flex-shrink:0;
+}
+.msg.ai .msg-av { background:rgba(249,115,22,0.15); border:1px solid rgba(249,115,22,0.25); }
+.msg.user .msg-av { background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.25); }
+.msg-bbl { max-width:78%; padding:13px 16px; border-radius:14px; font-size:12.5px; line-height:1.65; }
+.msg.ai .msg-bbl {
+  background:rgba(255,220,150,0.07);
+  border:1px solid rgba(255,220,150,0.12);
+  color:var(--t1);
+}
+.msg.user .msg-bbl {
+  background:linear-gradient(135deg,rgba(249,115,22,0.22),rgba(245,158,11,0.14));
+  border:1px solid rgba(249,115,22,0.25);
+  color:var(--t1);
+}
+.typing-dots { display:flex; gap:5px; align-items:center; padding:3px 0; }
+.typing-dots span {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--t3); animation:tdot 1.4s infinite both;
+}
+.typing-dots span:nth-child(2) { animation-delay:.2s; }
+.typing-dots span:nth-child(3) { animation-delay:.4s; }
+@keyframes tdot {
+  0%,80%,100% { transform:scale(0.6); opacity:.4; }
+  40%          { transform:scale(1); opacity:1; }
+}
+
+.quick-row { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; }
+.qbtn {
+  padding:6px 13px; border-radius:100px;
+  background:var(--glass-light); border:1px solid var(--glass-border);
+  color:var(--t2); font-size:10.5px; cursor:pointer;
+  font-family:'Jetbrains Mono',monospace; letter-spacing:.04em;
+  transition:all 0.18s cubic-bezier(0.34,1.56,0.64,1);
+}
+.qbtn:hover {
+  background:rgba(249,115,22,0.12); border-color:rgba(249,115,22,0.3);
+  color:var(--orange-l); transform:scale(1.04);
+}
+
+.agent-input-wrap {
+  padding:14px 16px;
+  border-top:1px solid var(--glass-border);
+  background:rgba(26,18,8,0.4);
+  display:flex; gap:10px; align-items:flex-end;
+}
+.agent-input {
+  flex:1; background:rgba(255,220,150,0.05);
+  border:1px solid var(--glass-border); border-radius:12px;
+  padding:10px 14px; color:var(--t1); resize:none;
+  font-family:'Bricolage Grotesque',sans-serif; font-size:13px;
+  outline:none; min-height:42px; max-height:120px; line-height:1.5;
+  transition:border-color 0.2s;
+}
+.agent-input:focus { border-color:rgba(249,115,22,0.4); }
+.agent-input::placeholder { color:var(--t3); }
+.agent-send {
+  width:42px; height:42px; border-radius:13px; flex-shrink:0;
+  background:linear-gradient(135deg,var(--orange),var(--amber));
+  border:none; cursor:pointer; display:flex; align-items:center;
+  justify-content:center; font-size:16px; transition:all 0.2s;
+  box-shadow:0 4px 16px rgba(249,115,22,0.4);
+}
+.agent-send:hover { transform:scale(1.05); box-shadow:0 6px 20px rgba(249,115,22,0.55); }
+.agent-send:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
+
+/* ══════════════════════════════════════════════
+   SPECIAL CARDS
+══════════════════════════════════════════════ */
+/* Visa-style card */
+.credit-card {
+  background: linear-gradient(135deg, #c2410c 0%, #f97316 45%, #fbbf24 100%);
+  border-radius: 16px; padding: 18px 20px;
+  position: relative; overflow: hidden;
+  box-shadow: 0 8px 32px rgba(249,115,22,0.45);
+  min-height: 120px;
+}
+.credit-card::before {
+  content:'';
+  position:absolute; top:-30px; right:-20px;
+  width:120px; height:120px; border-radius:50%;
+  background:rgba(255,255,255,0.1);
+}
+.credit-card::after {
+  content:'';
+  position:absolute; bottom:-40px; left:-20px;
+  width:140px; height:140px; border-radius:50%;
+  background:rgba(255,255,255,0.06);
+}
+.cc-label { font-size:9px; opacity:0.7; font-family:'Jetbrains Mono',monospace; letter-spacing:.12em; text-transform:uppercase; }
+.cc-val { font-family:'Cabinet Grotesk',sans-serif; font-size:22px; font-weight:900; color:#fff; margin-top:2px; }
+.cc-foot { display:flex; justify-content:space-between; align-items:flex-end; margin-top:16px; position:relative; z-index:1; }
+.cc-brand { font-family:'Cabinet Grotesk',sans-serif; font-size:20px; font-weight:900; color:rgba(255,255,255,0.9); letter-spacing:-0.02em; }
+
+/* Donut */
+.donut-wrap { display:flex; gap:14px; align-items:center; }
+.donut-leg { flex:1; display:flex; flex-direction:column; gap:7px; }
+.dl { display:flex; justify-content:space-between; align-items:center; font-size:10.5px; }
+.dl-lbl { color:var(--t2); display:flex; align-items:center; gap:6px; }
+.dl-dot { width:7px; height:7px; border-radius:50%; }
+.dl-val { font-family:'Jetbrains Mono',monospace; color:var(--t1); }
+
+/* Goal rings */
+.goal-ring-wrap { display:flex; flex-direction:column; align-items:center; }
+.goal-pct { font-family:'Cabinet Grotesk',sans-serif; font-size:22px; font-weight:900; }
+.goal-lbl { font-size:9.5px; color:var(--t3); font-family:'Jetbrains Mono',monospace; letter-spacing:.08em; margin-top:2px; text-transform:uppercase; }
+
+/* Transaction row */
+.txn-row {
+  display:flex; align-items:center; gap:12px;
+  padding:10px 0; border-bottom:1px solid rgba(255,220,150,0.05);
+}
+.txn-row:last-child { border-bottom:none; }
+.txn-av {
+  width:36px; height:36px; border-radius:11px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:15px;
+}
+.txn-name { font-size:12.5px; font-weight:600; color:var(--t1); }
+.txn-date { font-size:9.5px; color:var(--t3); font-family:'Jetbrains Mono',monospace; margin-top:1px; }
+.txn-amt {
+  margin-left:auto; padding:5px 12px; border-radius:100px;
+  font-family:'Jetbrains Mono',monospace; font-size:11px; font-weight:500;
+}
+.txn-pos { background:rgba(134,239,172,0.12); color:var(--green); border:1px solid rgba(134,239,172,0.2); }
+.txn-neg { background:rgba(248,113,113,0.12); color:var(--rose-d); border:1px solid rgba(248,113,113,0.2); }
+
+/* Stagger delays */
+.card:nth-child(1){animation-delay:.03s}.card:nth-child(2){animation-delay:.07s}
+.card:nth-child(3){animation-delay:.11s}.card:nth-child(4){animation-delay:.15s}
+.card:nth-child(5){animation-delay:.19s}
+
+/* Zone badge */
+.zone-badge {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 11px; border-radius:100px; font-size:10px;
+  margin-bottom:5px; font-family:'Jetbrains Mono',monospace;
+}
+</style>
+</head>
+<body>
+<div id="root">
+
+<!-- ══ FULL LABEL SIDENAV ══ -->
+<nav class="sidenav">
+  <div class="nav-brand">
+    <div class="nav-logo">R</div>
+    <div class="nav-brand-text">
+      <div class="nav-brand-name">RevOS™</div>
+      <div class="nav-brand-sub">West Bangalore</div>
+    </div>
+  </div>
+
+  <div class="nav-section-lbl">Main</div>
+
+  <div class="nav-btn active" data-page="overview" onclick="nav(this,'overview')">
+    <span class="nav-icon">⊞</span>
+    <span class="nav-label">Dashboard</span>
+    <span class="nav-badge">Live</span>
+  </div>
+  <div class="nav-btn" data-page="managers" onclick="nav(this,'managers')">
+    <span class="nav-icon">👤</span>
+    <span class="nav-label">Managers</span>
+  </div>
+  <div class="nav-btn" data-page="team" onclick="nav(this,'team')">
+    <span class="nav-icon">🏆</span>
+    <span class="nav-label">Leaderboard</span>
+  </div>
+  <div class="nav-btn" data-page="funnel" onclick="nav(this,'funnel')">
+    <span class="nav-icon">⊟</span>
+    <span class="nav-label">Heatmap</span>
+  </div>
+  <div class="nav-btn" data-page="territory" onclick="nav(this,'territory')">
+    <span class="nav-icon">🧠</span>
+    <span class="nav-label">BI Summary</span>
+  </div>
+  <div class="nav-btn" data-page="agent" onclick="nav(this,'agent')">
+    <span class="nav-icon">🗺</span>
+    <span class="nav-label">Blr Map</span>
+    <span class="nav-badge nav-badge-teal">AI</span>
+  </div>
+
+  <div class="nav-divider"></div>
+  <div class="nav-section-lbl">More</div>
+
+  <div class="nav-btn" data-page="managers" onclick="nav(this,'managers')">
+    <span class="nav-icon">✦</span>
+    <span class="nav-label">AI Agent</span>
+    <span class="nav-badge nav-badge-teal">GPT</span>
+  </div>
+
+  <div class="nav-spacer"></div>
+
+  <div class="nav-footer">
+    <span class="live-dot"></span>Live · Jun 2026<br>
+    <span style="padding-left:11px">30 Execs · 5 Mgrs</span>
+  </div>
+</nav>
+
+<!-- ══ MAIN PANEL ══ -->
+<div class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-title">
+      <div class="page-icon" id="pageIcon">🏠</div>
+      <span id="pageTitle">Command Overview</span>
+    </div>
+
+    <div class="topbar-center">
+      <div class="tbc-item" onclick="filterMonth(this,'Apr')">Apr</div>
+      <div class="tbc-item" onclick="filterMonth(this,'May')">May</div>
+      <div class="tbc-item active" onclick="filterMonth(this,'Jun')">Jun</div>
+      <div class="tbc-item" onclick="filterMonth(this,'QTD')">QTD</div>
+    </div>
+
+    <div class="topbar-right">
+      <div class="tb-chip tb-chip-green"><span class="pulse-dot"></span>114% Achieved</div>
+      <div class="tb-chip tb-chip-amber">₹91.2L Revenue</div>
+      <div class="tb-chip tb-chip-orange">Q2 FY2026</div>
+      <div class="tb-avatar">P</div>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+  <!-- ═══════════ PAGE 1 — OVERVIEW ═══════════ -->
+  <div class="page active" id="pg-overview">
+
+    <!-- KPI Row -->
+    <div class="g5 mb">
+      <div class="card card-p">
+        <div class="stat-lbl">Branch Revenue</div>
+        <div class="stat-val" style="color:var(--orange-l)">₹91.2L</div>
+        <div class="stat-sub"><span class="delta d-up">▲ 14.0%</span> vs May</div>
+        <div class="track"><div class="track-fill" style="width:91%;background:linear-gradient(90deg,var(--orange),var(--amber))"></div></div>
+      </div>
+      <div class="card card-p">
+        <div class="stat-lbl">Achievement</div>
+        <div class="stat-val" style="color:var(--amber-l)">114%</div>
+        <div class="stat-sub"><span class="delta d-up">▲ 8 pts</span> MoM</div>
+        <div class="track"><div class="track-fill" style="width:100%;background:linear-gradient(90deg,var(--amber),var(--orange))"></div></div>
+      </div>
+      <div class="card card-p">
+        <div class="stat-lbl">Paid Clients</div>
+        <div class="stat-val" style="color:var(--green)">217</div>
+        <div class="stat-sub"><span class="delta d-up">▲ 23</span> new this month</div>
+        <div class="track"><div class="track-fill" style="width:72%;background:linear-gradient(90deg,var(--green-d),var(--teal))"></div></div>
+      </div>
+      <div class="card card-p">
+        <div class="stat-lbl">Conversion Rate</div>
+        <div class="stat-val" style="color:var(--teal)">38.4%</div>
+        <div class="stat-sub"><span class="delta d-up">▲ 5.2 pts</span> vs Q1</div>
+        <div class="track"><div class="track-fill" style="width:38%;background:linear-gradient(90deg,var(--teal),var(--blue))"></div></div>
+      </div>
+      <div class="card card-p">
+        <div class="stat-lbl">COCA</div>
+        <div class="stat-val" style="color:var(--rose)">₹21,400</div>
+        <div class="stat-sub"><span class="delta d-up">▼ 8%</span> vs ₹23,200 May</div>
+        <div class="track"><div class="track-fill" style="width:54%;background:linear-gradient(90deg,var(--rose-d),var(--orange))"></div></div>
+      </div>
+    </div>
+
+    <!-- Row 2 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 340px;gap:16px" class="mb">
+
+      <!-- Revenue Trend Chart -->
+      <div class="card card-p" style="grid-column:1/3">
+        <div class="eyebrow">6-Month Revenue Trend · ₹ Lakhs</div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:6px">
+          <div style="font-family:'Cabinet Grotesk',sans-serif;font-size:22px;font-weight:800;color:var(--t1)">₹91.2L <span style="font-size:13px;font-weight:500;color:var(--green)">↑ Best Month</span></div>
+          <div style="display:flex;gap:14px">
+            <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--t2);font-family:'Jetbrains Mono',monospace"><div style="width:24px;height:2px;background:var(--orange);border-radius:1px"></div>Revenue</div>
+            <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--t2);font-family:'Jetbrains Mono',monospace"><div style="width:24px;height:2px;background:var(--teal);border-radius:1px;border-top:2px dashed var(--teal)"></div>Target</div>
+          </div>
+        </div>
+        <svg id="trendSvg" width="100%" height="130" viewBox="0 0 640 130" preserveAspectRatio="none"></svg>
+        <div style="display:flex;justify-content:space-between;margin-top:5px;padding:0 8px">
+          <span style="font-family:'Jetbrains Mono',monospace;font-size:8.5px;color:var(--t3)">Jan</span>
+          <span style="font-family:'Jetbrains Mono',monospace;font-size:8.5px;color:var(--t3)">Feb</span>
+          <span style="font-family:'Jetbrains Mono',monospace;font-size:8.5px;color:var(--t3)">Mar</span>
+          <span style="font-family:'Jetbrains Mono',monospace;font-size:8.5px;color:var(--t3)">Apr</span>
+          <span style="font-family:'Jetbrains Mono',monospace;font-size:8.5px;color:var(--t3)">May</span>
+          <span style="font-family:'Jetbrains Mono',monospace;font-size:8.5px;color:var(--t3)">Jun ★</span>
+        </div>
+      </div>
+
+      <!-- Profile + Card -->
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <!-- Branch card -->
+        <div class="credit-card">
+          <div class="cc-label">Branch · West Bangalore</div>
+          <div class="cc-val">₹91.2L</div>
+          <div class="cc-foot">
+            <div>
+              <div style="font-size:8.5px;opacity:0.65;font-family:'Jetbrains Mono',monospace;letter-spacing:.1em">TARGET</div>
+              <div style="font-size:13px;font-weight:700;color:#fff">₹80.0L</div>
+            </div>
+            <div class="cc-brand">RevOS™</div>
+          </div>
+        </div>
+        <!-- mini stats -->
+        <div class="card card-p-sm">
+          <div class="eyebrow" style="margin-bottom:8px">Quick Stats</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><div style="font-size:8.5px;color:var(--t3);font-family:'Jetbrains Mono',monospace;text-transform:uppercase;letter-spacing:.12em;margin-bottom:2px">Avg ASP</div><div style="font-family:'Cabinet Grotesk',sans-serif;font-size:16px;font-weight:800;color:var(--amber-l)">₹42K</div></div>
+            <div><div style="font-size:8.5px;color:var(--t3);font-family:'Jetbrains Mono',monospace;text-transform:uppercase;letter-spacing:.12em;margin-bottom:2px">Rev/Exec</div><div style="font-family:'Cabinet Grotesk',sans-serif;font-size:16px;font-weight:800;color:var(--teal)">₹3.04L</div></div>
+            <div><div style="font-size:8.5px;color:var(--t3);font-family:'Jetbrains Mono',monospace;text-transform:uppercase;letter-spacing:.12em;margin-bottom:2px">Leakage</div><div style="font-family:'Cabinet Grotesk',sans-serif;font-size:16px;font-weight:800;color:var(--rose)">6.7%</div></div>
+            <div><div style="font-size:8.5px;color:var(--t3);font-family:'Jetbrains Mono',monospace;text-transform:uppercase;letter-spacing:.12em;margin-bottom:2px">Close Days</div><div style="font-family:'Cabinet Grotesk',sans-serif;font-size:16px;font-weight:800;color:var(--blue)">3.8</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 3 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px" class="mb">
+
+      <!-- Exec Grid -->
+      <div class="card card-p">
+        <div class="eyebrow">Executive Heat Grid · 30 Reps</div>
+        <div class="exec-grid" id="execGrid1"></div>
+        <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+          <span style="display:flex;align-items:center;gap:5px;font-size:8.5px;color:var(--t3);font-family:'Jetbrains Mono',monospace"><span style="width:8px;height:8px;border-radius:2px;background:rgba(134,239,172,0.3);display:inline-block"></span>≥100%</span>
+          <span style="display:flex;align-items:center;gap:5px;font-size:8.5px;color:var(--t3);font-family:'Jetbrains Mono',monospace"><span style="width:8px;height:8px;border-radius:2px;background:rgba(251,191,36,0.3);display:inline-block"></span>75–99%</span>
+          <span style="display:flex;align-items:center;gap:5px;font-size:8.5px;color:var(--t3);font-family:'Jetbrains Mono',monospace"><span style="width:8px;height:8px;border-radius:2px;background:rgba(248,113,113,0.25);display:inline-block"></span>&lt;75%</span>
+        </div>
+      </div>
+
+      <!-- Donut -->
+      <div class="card card-p">
+        <div class="eyebrow">Revenue by Manager</div>
+        <div class="donut-wrap">
+          <svg width="100" height="100" viewBox="0 0 100 100" id="mgrDonut"></svg>
+          <div class="donut-leg" id="mgrLeg"></div>
+        </div>
+      </div>
+
+      <!-- GTM Flags -->
+      <div class="card card-p">
+        <div class="eyebrow">GTM Intelligence</div>
+        <div class="iitem">
+          <div class="iicon" style="background:rgba(134,239,172,0.1)">🚀</div>
+          <div><div class="ih">Arjun's team 128% — playbook ready</div><div class="is">Demo-close: 3.2 days</div></div>
+        </div>
+        <div class="iitem">
+          <div class="iicon" style="background:rgba(251,191,36,0.1)">⚡</div>
+          <div><div class="ih">COCA down 8% this month</div><div class="is">₹21,400 vs ₹23,200 May</div></div>
+        </div>
+        <div class="iitem">
+          <div class="iicon" style="background:rgba(248,113,113,0.1)">⚠️</div>
+          <div><div class="ih">2 execs below 65% — PIP flag</div><div class="is">Rekha J 62%, Preethi S 72%</div></div>
+        </div>
+      </div>
+
+      <!-- Transactions (win feed) -->
+      <div class="card card-p">
+        <div class="eyebrow">Latest Wins · Today</div>
+        <div class="txn-row">
+          <div class="txn-av" style="background:rgba(134,239,172,0.1)">🏢</div>
+          <div><div class="txn-name">Vikram S — Whitefield</div><div class="txn-date">Jun 07, 2026 · 11:24 AM</div></div>
+          <div class="txn-amt txn-pos">+₹42K</div>
+        </div>
+        <div class="txn-row">
+          <div class="txn-av" style="background:rgba(147,197,253,0.1)">🏭</div>
+          <div><div class="txn-name">Harini K — Yeshwanthpur</div><div class="txn-date">Jun 07, 2026 · 10:08 AM</div></div>
+          <div class="txn-amt txn-pos">+₹42K</div>
+        </div>
+        <div class="txn-row">
+          <div class="txn-av" style="background:rgba(249,115,22,0.1)">🛒</div>
+          <div><div class="txn-name">Rohan G — Indiranagar</div><div class="txn-date">Jun 06, 2026 · 5:45 PM</div></div>
+          <div class="txn-amt txn-pos">+₹42K</div>
+        </div>
+        <div style="text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,220,150,0.06)">
+          <span style="font-size:10px;color:var(--orange-l);cursor:pointer;font-family:'Jetbrains Mono',monospace;letter-spacing:.06em">See all 217 transactions →</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 4: Goals -->
+    <div class="g5">
+      <div class="card card-p" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <svg width="80" height="80" viewBox="0 0 80 80" id="ring1"></svg>
+        <div style="text-align:center;margin-top:8px">
+          <div style="font-family:'Cabinet Grotesk',sans-serif;font-size:20px;font-weight:900;color:var(--orange-l)">114%</div>
+          <div style="font-size:9.5px;color:var(--t3);font-family:'Jetbrains Mono',monospace;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Revenue Goal</div>
+        </div>
+      </div>
+      <div class="card card-p" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <svg width="80" height="80" viewBox="0 0 80 80" id="ring2"></svg>
+        <div style="text-align:center;margin-top:8px">
+          <div style="font-family:'Cabinet Grotesk',sans-serif;font-size:20px;font-weight:900;color:var(--teal)">72%</div>
+          <div style="font-size:9.5px;color:var(--t3);font-family:'Jetbrains Mono',monospace;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Client Expansion</div>
+        </div>
+      </div>
+      <div class="card card-p" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <svg width="80" height="80" viewBox="0 0 80 80" id="ring3"></svg>
+        <div style="text-align:center;margin-top:8px">
+          <div style="font-family:'Cabinet Grotesk',sans-serif;font-size:20px;font-weight:900;color:var(--green)">88%</div>
+          <div style="font-size:9.5px;color:var(--t3);font-family:'Jetbrains Mono',monospace;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">COCA Target</div>
+        </div>
+      </div>
+      <div class="card card-p" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <svg width="80" height="80" viewBox="0 0 80 80" id="ring4"></svg>
+        <div style="text-align:center;margin-top:8px">
+          <div style="font-family:'Cabinet Grotesk',sans-serif;font-size:20px;font-weight:900;color:var(--amber-l)">93%</div>
+          <div style="font-size:9.5px;color:var(--t3);font-family:'Jetbrains Mono',monospace;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Team On-Track</div>
+        </div>
+      </div>
+      <div class="card card-p">
+        <div class="eyebrow">Business Health</div>
+        <div style="margin-top:4px">
+          <div class="prog-row">
+            <div class="prog-label">Target Savings</div>
+            <div class="prog-bg"><div class="prog-fg" style="width:65%;background:linear-gradient(90deg,var(--orange),var(--amber))"></div></div>
+            <div class="prog-val">65%</div>
+          </div>
+          <div class="prog-row">
+            <div class="prog-label">Pipeline Health</div>
+            <div class="prog-bg"><div class="prog-fg" style="width:84%;background:linear-gradient(90deg,var(--teal),var(--green-d))"></div></div>
+            <div class="prog-val">84%</div>
+          </div>
+          <div class="prog-row">
+            <div class="prog-label">Retention</div>
+            <div class="prog-bg"><div class="prog-fg" style="width:91%;background:linear-gradient(90deg,var(--green-d),var(--teal))"></div></div>
+            <div class="prog-val">91%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ PAGE 2 — TEAM ═══════════ -->
+  <div class="page" id="pg-team">
+    <div class="g5 mb" id="teamKpiRow"></div>
+    <div class="g2 mb">
+      <div class="card card-p">
+        <div class="eyebrow">Achievement Distribution · All 30 Execs</div>
+        <div id="achDistBars"></div>
+      </div>
+      <div class="card card-p">
+        <div class="eyebrow">Monthly Win Velocity · Paid Clients</div>
+        <svg id="velSvg" width="100%" height="150" viewBox="0 0 420 150"></svg>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;padding:0 6px">
+          <span style="font-family:'Jetbrains Mono',monospace;font-size:8.5px;color:var(--t3)">Feb</span>
+          <span style="font-family:'Jetbrains Mono',monospace;font-size:8.5px;color:var(--t3)">Mar</span>
+          <span style="font-family:'Jetbrains Mono',monospace;font-size:8.5px;color:var(--t3)">Apr</span>
+          <span style="font-family:'Jetbrains Mono',monospace;font-size:8.5px;color:var(--t3)">May</span>
+          <span style="font-family:'Jetbrains Mono',monospace;font-size:8.5px;color:var(--t3)">Jun</span>
+        </div>
+      </div>
+    </div>
+    <div class="card card-p">
+      <div class="eyebrow">Full Executive Leaderboard · 30 Reps</div>
+      <table class="tbl" id="fullLead"></table>
+    </div>
+  </div>
+
+  <!-- ═══════════ PAGE 3 — FUNNEL ═══════════ -->
+  <div class="page" id="pg-funnel">
+    <div class="g4 mb">
+      <div class="card card-p">
+        <div class="stat-lbl">Total Leads</div>
+        <div class="stat-val" style="color:var(--blue)">565</div>
+        <div class="stat-sub">Monthly intake</div>
+      </div>
+      <div class="card card-p">
+        <div class="stat-lbl">Connected</div>
+        <div class="stat-val" style="color:var(--teal)">474</div>
+        <div class="stat-sub"><span class="delta d-up">84%</span> connect rate</div>
+      </div>
+      <div class="card card-p">
+        <div class="stat-lbl">Demo Done</div>
+        <div class="stat-val" style="color:var(--purple)">318</div>
+        <div class="stat-sub"><span class="delta d-up">67%</span> of connected</div>
+      </div>
+      <div class="card card-p">
+        <div class="stat-lbl">Paid / Won</div>
+        <div class="stat-val" style="color:var(--green)">217</div>
+        <div class="stat-sub"><span class="delta d-up">38.4%</span> overall</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:16px" class="mb">
+      <div class="card card-p">
+        <div class="eyebrow">Conversion Funnel · Stage by Stage</div>
+        <div style="margin-top:8px">
+          <div class="f-stage"><div class="f-lbl">Total Leads</div><div class="f-bg"><div class="f-fill" style="width:100%;background:linear-gradient(90deg,#4f9cf9,#60a5fa)">565</div></div><div class="f-pct">100%</div></div>
+          <div class="f-arrow">↓ 84% connect</div>
+          <div class="f-stage"><div class="f-lbl">Connected</div><div class="f-bg"><div class="f-fill" style="width:84%;background:linear-gradient(90deg,var(--teal),#4f9cf9)">474</div></div><div class="f-pct">84%</div></div>
+          <div class="f-arrow">↓ 67% demo</div>
+          <div class="f-stage"><div class="f-lbl">Demo Conducted</div><div class="f-bg"><div class="f-fill" style="width:56%;background:linear-gradient(90deg,var(--purple),var(--teal))">318</div></div><div class="f-pct">56%</div></div>
+          <div class="f-arrow">↓ 68% proposal</div>
+          <div class="f-stage"><div class="f-lbl">Proposal Sent</div><div class="f-bg"><div class="f-fill" style="width:38%;background:linear-gradient(90deg,var(--amber),var(--orange))">217</div></div><div class="f-pct">38%</div></div>
+          <div class="f-arrow">↓ 100% close</div>
+          <div class="f-stage"><div class="f-lbl" style="color:var(--green);font-weight:700">Paid / Won ✦</div><div class="f-bg"><div class="f-fill" style="width:38%;background:linear-gradient(90deg,var(--green-d),var(--teal))">217</div></div><div class="f-pct" style="color:var(--green)">38.4%</div></div>
+        </div>
+      </div>
+      <div class="card card-p">
+        <div class="eyebrow">Funnel Health</div>
+        <div style="display:flex;flex-direction:column;gap:14px;margin-top:8px">
+          <div><div class="stat-lbl">Avg Sale Price</div><div style="font-family:'Cabinet Grotesk',sans-serif;font-size:26px;font-weight:900;color:var(--amber-l)">₹42,000</div></div>
+          <div><div class="stat-lbl">Revenue / Exec</div><div style="font-family:'Cabinet Grotesk',sans-serif;font-size:26px;font-weight:900;color:var(--teal)">₹3.04L</div></div>
+          <div><div class="stat-lbl">Zero-Sale Execs</div><div style="font-family:'Cabinet Grotesk',sans-serif;font-size:26px;font-weight:900;color:var(--rose-d)">2 / 30</div></div>
+          <div><div class="stat-lbl">Avg Demo-to-Close</div><div style="font-family:'Cabinet Grotesk',sans-serif;font-size:26px;font-weight:900;color:var(--blue)">3.8 days</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card card-p">
+      <div class="eyebrow">Manager-wise Funnel Performance</div>
+      <table class="tbl">
+        <thead><tr><th>Manager</th><th>Leads</th><th>Connected</th><th>Demo%</th><th>Won</th><th>Conv%</th><th>Revenue</th><th>Ach%</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Arjun Rao</td><td>118</td><td>101</td><td>74%</td><td>47</td><td><span class="pill p-g">39.8%</span></td><td style="color:var(--amber-l);font-family:'Jetbrains Mono',monospace">₹19.8L</td><td style="color:var(--green)">128%</td><td><span class="pill p-g">Exceeds</span></td></tr>
+          <tr><td>Priya Krishnan</td><td>115</td><td>97</td><td>71%</td><td>44</td><td><span class="pill p-g">38.3%</span></td><td style="color:var(--amber-l);font-family:'Jetbrains Mono',monospace">₹18.4L</td><td style="color:var(--green)">119%</td><td><span class="pill p-g">Exceeds</span></td></tr>
+          <tr><td>Sanjay Kumar</td><td>112</td><td>94</td><td>68%</td><td>42</td><td><span class="pill p-y">37.5%</span></td><td style="color:var(--amber-l);font-family:'Jetbrains Mono',monospace">₹17.6L</td><td style="color:var(--amber-l)">114%</td><td><span class="pill p-y">Meets</span></td></tr>
+          <tr><td>Neha Verma</td><td>110</td><td>91</td><td>65%</td><td>39</td><td><span class="pill p-y">35.5%</span></td><td style="color:var(--amber-l);font-family:'Jetbrains Mono',monospace">₹16.2L</td><td style="color:var(--amber-l)">105%</td><td><span class="pill p-y">Meets</span></td></tr>
+          <tr><td>Ravi Teja</td><td>110</td><td>91</td><td>72%</td><td>45</td><td><span class="pill p-g">40.9%</span></td><td style="color:var(--amber-l);font-family:'Jetbrains Mono',monospace">₹19.2L</td><td style="color:var(--green)">124%</td><td><span class="pill p-g">Exceeds</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════ PAGE 4 — TERRITORY ═══════════ -->
+  <div class="page" id="pg-territory">
+    <div class="g4 mb">
+      <div class="card card-p"><div class="stat-lbl">Zones Covered</div><div class="stat-val" style="color:var(--blue)">5</div><div class="stat-sub">Bangalore clusters</div></div>
+      <div class="card card-p"><div class="stat-lbl">Top Zone Rev</div><div class="stat-val" style="color:var(--amber-l)">₹22.4L</div><div class="stat-sub">Whitefield–KR Puram</div></div>
+      <div class="card card-p"><div class="stat-lbl">Avg Zone Rev</div><div class="stat-val" style="color:var(--teal)">₹18.2L</div><div class="stat-sub">per territory</div></div>
+      <div class="card card-p"><div class="stat-lbl">Expansion Flags</div><div class="stat-val" style="color:var(--green)">2</div><div class="stat-sub">High-potential zones</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:16px">
+      <div class="card card-p">
+        <div class="eyebrow">Bangalore Territory Coverage · Interactive Map</div>
+        <div id="blr-map"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card card-p">
+          <div class="eyebrow">Zone Revenue Breakdown</div>
+          <div id="zoneBars"></div>
+        </div>
+        <div class="card card-p">
+          <div class="eyebrow">Territory Intelligence</div>
+          <div class="iitem">
+            <div class="iicon" style="background:rgba(147,197,253,0.1)">📍</div>
+            <div><div class="ih">Whitefield over-index: 24.6% rev, 17% HC</div><div class="is">Recommend +2 execs Q3</div></div>
+          </div>
+          <div class="iitem">
+            <div class="iicon" style="background:rgba(134,239,172,0.1)">🌱</div>
+            <div><div class="ih">JP Nagar emerging: 18% MoM growth</div><div class="is">New SMB cluster forming</div></div>
+          </div>
+          <div class="iitem">
+            <div class="iicon" style="background:rgba(248,113,113,0.1)">⚠️</div>
+            <div><div class="ih">Rajajinagar under-penetrated</div><div class="is">Lowest rev/exec ratio</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ PAGE 5 — MANAGERS ═══════════ -->
+  <div class="page" id="pg-managers">
+    <div class="g3 mb" id="mgrKpiRow"></div>
+    <div class="g2 mb" id="mgrDetailGrid"></div>
+    <div class="card card-p">
+      <div class="eyebrow">Manager Comparative Performance</div>
+      <table class="tbl">
+        <thead><tr><th>Manager</th><th>Team</th><th>Revenue</th><th>Ach%</th><th>Avg Exec</th><th>Top Exec</th><th>COCA</th><th>Conv%</th><th>Rating</th></tr></thead>
+        <tbody>
+          <tr><td>Arjun Rao</td><td>Alpha · 6</td><td style="color:var(--amber-l);font-family:'Jetbrains Mono',monospace">₹19.8L</td><td style="color:var(--green)">128%</td><td>112%</td><td>Vikram S · 142%</td><td style="font-family:'Jetbrains Mono',monospace">₹19,500</td><td>39.8%</td><td><span class="pill p-g">Exceeds</span></td></tr>
+          <tr><td>Ravi Teja</td><td>Epsilon · 6</td><td style="color:var(--amber-l);font-family:'Jetbrains Mono',monospace">₹19.2L</td><td style="color:var(--green)">124%</td><td>114%</td><td>Sunil V · 139%</td><td style="font-family:'Jetbrains Mono',monospace">₹18,800</td><td>40.9%</td><td><span class="pill p-g">Exceeds</span></td></tr>
+          <tr><td>Priya Krishnan</td><td>Beta · 6</td><td style="color:var(--amber-l);font-family:'Jetbrains Mono',monospace">₹18.4L</td><td style="color:var(--green)">119%</td><td>103%</td><td>Rohan G · 136%</td><td style="font-family:'Jetbrains Mono',monospace">₹20,100</td><td>38.3%</td><td><span class="pill p-g">Exceeds</span></td></tr>
+          <tr><td>Sanjay Kumar</td><td>Gamma · 6</td><td style="color:var(--amber-l);font-family:'Jetbrains Mono',monospace">₹17.6L</td><td style="color:var(--amber-l)">114%</td><td>104%</td><td>Nikhil R · 131%</td><td style="font-family:'Jetbrains Mono',monospace">₹22,600</td><td>37.5%</td><td><span class="pill p-y">Meets</span></td></tr>
+          <tr><td>Neha Verma</td><td>Delta · 6</td><td style="color:var(--amber-l);font-family:'Jetbrains Mono',monospace">₹16.2L</td><td style="color:var(--amber-l)">105%</td><td>89%</td><td>Ganesh B · 122%</td><td style="font-family:'Jetbrains Mono',monospace">₹24,300</td><td>35.5%</td><td><span class="pill p-y">Meets</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════ PAGE 6 — AI AGENT ═══════════ -->
+  <div class="page" id="pg-agent">
+    <div class="agent-shell">
+      <div class="agent-header">
+        <div class="card card-p-sm" style="border-color:rgba(249,115,22,0.25);background:rgba(249,115,22,0.06)">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;border-radius:13px;background:linear-gradient(135deg,rgba(249,115,22,0.25),rgba(245,158,11,0.15));border:1px solid rgba(249,115,22,0.35);display:flex;align-items:center;justify-content:center;font-size:18px">✦</div>
+            <div>
+              <div style="font-family:'Cabinet Grotesk',sans-serif;font-size:15px;font-weight:800;color:var(--orange-l)">AI Revenue Agent · West Bangalore</div>
+              <div style="font-size:10px;color:var(--t3);font-family:'Jetbrains Mono',monospace">Powered by Claude · Full Q2 FY2026 branch context loaded · 30 execs · 5 managers</div>
+            </div>
+            <div class="tb-chip tb-chip-green" style="margin-left:auto"><span class="pulse-dot"></span>Online</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="quick-row">
+        <button class="qbtn" onclick="sq('Give me a complete Q2 FY2026 branch health summary')">📊 Branch Summary</button>
+        <button class="qbtn" onclick="sq('Analyse top 3 executives and their winning patterns')">🏆 Top Performers</button>
+        <button class="qbtn" onclick="sq('Which territory has highest expansion potential and why?')">📍 Territory Intel</button>
+        <button class="qbtn" onclick="sq('What is causing the leakage and give me a fix plan')">⚠️ Fix Leakage</button>
+        <button class="qbtn" onclick="sq('Build me a 30-day action plan to hit 125% next month')">🎯 30-Day Plan</button>
+        <button class="qbtn" onclick="sq('Identify which managers need coaching and what type of coaching')">👥 Coaching Flags</button>
+        <button class="qbtn" onclick="sq('What RevOps metrics should I present to the CEO this quarter?')">📋 CEO Metrics</button>
+      </div>
+
+      <div class="agent-body" style="position:relative">
+        <div class="agent-msgs" id="agentMsgs">
+          <div class="msg ai">
+            <div class="msg-av">✦</div>
+            <div class="msg-bbl">
+              <strong style="color:var(--orange-l)">Revenue Agent is live.</strong> I have full context on your West Bangalore branch — Q2 FY2026.<br><br>
+              <strong>Loaded:</strong> ₹91.2L revenue · 30 executives · 5 managers · 217 paid clients · 114% achievement · ₹21,400 COCA · 38.4% conversion · 5 territory zones<br><br>
+              Ask me anything — performance deep-dives, territory strategy, coaching plans, COCA optimization, or a full C-suite narrative. Use the quick buttons or type below.
+            </div>
+          </div>
+        </div>
+        <div class="agent-input-wrap">
+          <textarea class="agent-input" id="agentInput" placeholder="Ask about revenue, team, pipeline, territory, coaching..." rows="1" onkeydown="handleKey(event)"></textarea>
+          <button class="agent-send" id="agentSend" onclick="sendMsg()">➤</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- end content -->
+</div><!-- end main -->
+</div><!-- end root -->
+
+<script>
+/* ═══════════════════════════════════════════
+   DATA
+═══════════════════════════════════════════ */
+var EXECS=[
+  {name:'Vikram S',mgr:'Arjun',col:'#f97316',ach:142,rev:4.22,tgt:2.97,clients:9,zone:'Whitefield'},
+  {name:'Divya M',mgr:'Arjun',col:'#f97316',ach:128,rev:3.80,tgt:2.97,clients:8,zone:'Whitefield'},
+  {name:'Kiran B',mgr:'Arjun',col:'#f97316',ach:115,rev:3.41,tgt:2.97,clients:8,zone:'KR Puram'},
+  {name:'Ananya R',mgr:'Arjun',col:'#f97316',ach:108,rev:3.21,tgt:2.97,clients:7,zone:'KR Puram'},
+  {name:'Suresh T',mgr:'Arjun',col:'#f97316',ach:98,rev:2.91,tgt:2.97,clients:7,zone:'Whitefield'},
+  {name:'Meena K',mgr:'Arjun',col:'#f97316',ach:82,rev:2.43,tgt:2.97,clients:6,zone:'KR Puram'},
+  {name:'Rohan G',mgr:'Priya',col:'#2dd4bf',ach:136,rev:4.04,tgt:2.97,clients:9,zone:'Indiranagar'},
+  {name:'Sneha P',mgr:'Priya',col:'#2dd4bf',ach:124,rev:3.68,tgt:2.97,clients:8,zone:'Koramangala'},
+  {name:'Rahul N',mgr:'Priya',col:'#2dd4bf',ach:119,rev:3.53,tgt:2.97,clients:8,zone:'Indiranagar'},
+  {name:'Lakshmi V',mgr:'Priya',col:'#2dd4bf',ach:104,rev:3.09,tgt:2.97,clients:7,zone:'Koramangala'},
+  {name:'Aditya C',mgr:'Priya',col:'#2dd4bf',ach:96,rev:2.85,tgt:2.97,clients:7,zone:'Indiranagar'},
+  {name:'Pooja S',mgr:'Priya',col:'#2dd4bf',ach:78,rev:2.31,tgt:2.97,clients:6,zone:'Koramangala'},
+  {name:'Nikhil R',mgr:'Sanjay',col:'#fbbf24',ach:131,rev:3.89,tgt:2.97,clients:9,zone:'Hebbal'},
+  {name:'Kavya H',mgr:'Sanjay',col:'#fbbf24',ach:118,rev:3.50,tgt:2.97,clients:8,zone:'Yelahanka'},
+  {name:'Deepak M',mgr:'Sanjay',col:'#fbbf24',ach:112,rev:3.32,tgt:2.97,clients:8,zone:'Hebbal'},
+  {name:'Ritu P',mgr:'Sanjay',col:'#fbbf24',ach:103,rev:3.06,tgt:2.97,clients:7,zone:'Yelahanka'},
+  {name:'Aryan K',mgr:'Sanjay',col:'#fbbf24',ach:91,rev:2.70,tgt:2.97,clients:6,zone:'Hebbal'},
+  {name:'Preethi S',mgr:'Sanjay',col:'#fbbf24',ach:72,rev:2.13,tgt:2.97,clients:5,zone:'Yelahanka'},
+  {name:'Ganesh B',mgr:'Neha',col:'#d8b4fe',ach:122,rev:3.62,tgt:2.97,clients:8,zone:'JP Nagar'},
+  {name:'Swati L',mgr:'Neha',col:'#d8b4fe',ach:115,rev:3.41,tgt:2.97,clients:8,zone:'Bannerghatta'},
+  {name:'Manoj D',mgr:'Neha',col:'#d8b4fe',ach:108,rev:3.21,tgt:2.97,clients:7,zone:'JP Nagar'},
+  {name:'Nandini A',mgr:'Neha',col:'#d8b4fe',ach:96,rev:2.85,tgt:2.97,clients:7,zone:'Bannerghatta'},
+  {name:'Ashwin T',mgr:'Neha',col:'#d8b4fe',ach:88,rev:2.61,tgt:2.97,clients:6,zone:'JP Nagar'},
+  {name:'Rekha J',mgr:'Neha',col:'#d8b4fe',ach:62,rev:1.84,tgt:2.97,clients:4,zone:'Bannerghatta'},
+  {name:'Sunil V',mgr:'Ravi',col:'#86efac',ach:139,rev:4.13,tgt:2.97,clients:9,zone:'Rajajinagar'},
+  {name:'Harini K',mgr:'Ravi',col:'#86efac',ach:132,rev:3.92,tgt:2.97,clients:9,zone:'Yeshwanthpur'},
+  {name:'Prasad N',mgr:'Ravi',col:'#86efac',ach:121,rev:3.59,tgt:2.97,clients:8,zone:'Rajajinagar'},
+  {name:'Chetan M',mgr:'Ravi',col:'#86efac',ach:110,rev:3.27,tgt:2.97,clients:7,zone:'Yeshwanthpur'},
+  {name:'Bhavana S',mgr:'Ravi',col:'#86efac',ach:97,rev:2.88,tgt:2.97,clients:7,zone:'Rajajinagar'},
+  {name:'Karthik P',mgr:'Ravi',col:'#86efac',ach:85,rev:2.52,tgt:2.97,clients:6,zone:'Yeshwanthpur'},
+];
+
+var MGRS=[
+  {name:'Arjun Rao',  short:'AR',col:'#f97316',bg:'rgba(249,115,22,.15)', team:'Alpha',  rev:19.8,ach:128},
+  {name:'Priya Krishnan',short:'PK',col:'#2dd4bf',bg:'rgba(45,212,191,.15)',team:'Beta',rev:18.4,ach:119},
+  {name:'Sanjay Kumar',short:'SK',col:'#fbbf24',bg:'rgba(251,191,36,.15)', team:'Gamma', rev:17.6,ach:114},
+  {name:'Neha Verma', short:'NV',col:'#d8b4fe',bg:'rgba(216,180,254,.15)',team:'Delta',  rev:16.2,ach:105},
+  {name:'Ravi Teja',  short:'RT',col:'#86efac',bg:'rgba(134,239,172,.15)',team:'Epsilon',rev:19.2,ach:124},
+];
+
+var TREND=[72.1,76.4,80.2,84.6,79.9,91.2];
+var TARGET=[80,80,80,80,80,80];
+var VEL=[148,162,171,188,194,217];
+
+/* ═══════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════ */
+var PAGE_META={
+  overview:{title:'Dashboard',icon:'⊞'},
+  team:{title:'Leaderboard',icon:'🏆'},
+  funnel:{title:'Heatmap',icon:'⊟'},
+  territory:{title:'BI Summary',icon:'🧠'},
+  managers:{title:'Managers',icon:'👤'},
+  agent:{title:'Blr Map & AI Agent',icon:'🗺'},
+};
+function nav(el,id){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});
+  document.getElementById('pg-'+id).classList.add('active');
+  document.querySelectorAll('.nav-btn[data-page]').forEach(function(b){b.classList.remove('active')});
+  el.classList.add('active');
+  document.getElementById('pageTitle').textContent=PAGE_META[id].title;
+  document.getElementById('pageIcon').textContent=PAGE_META[id].icon;
+  if(id==='territory') setTimeout(initMap,80);
+}
+function filterMonth(el,m){
+  document.querySelectorAll('.tbc-item').forEach(function(i){i.classList.remove('active')});
+  el.classList.add('active');
+}
+
+/* ═══════════════════════════════════════════
+   EXEC GRID
+═══════════════════════════════════════════ */
+function buildExecGrid(id){
+  var c=document.getElementById(id); if(!c) return;
+  EXECS.forEach(function(e){
+    var cl=e.ach>=100?'e-g':e.ach>=75?'e-y':'e-r';
+    var d=document.createElement('div');
+    d.className='edot '+cl;
+    var ini=e.name.split(' ').map(function(w){return w[0]}).join('');
+    d.innerHTML=ini+'<div class="tip">'+e.name+' · '+e.ach+'%</div>';
+    c.appendChild(d);
+  });
+}
+buildExecGrid('execGrid1');
+
+/* ═══════════════════════════════════════════
+   DONUT
+═══════════════════════════════════════════ */
+function buildDonut(){
+  var svg=document.getElementById('mgrDonut');
+  var leg=document.getElementById('mgrLeg');
+  if(!svg||!leg) return;
+  var total=MGRS.reduce(function(s,m){return s+m.rev},0);
+  var cx=50,cy=50,ro=44,ri=28,start=0,legH='';
+  MGRS.forEach(function(m){
+    var pct=m.rev/total, angle=pct*2*Math.PI;
+    var x1=cx+ro*Math.sin(start), y1=cy-ro*Math.cos(start);
+    var x2=cx+ro*Math.sin(start+angle), y2=cy-ro*Math.cos(start+angle);
+    var i1=cx+ri*Math.sin(start), j1=cy-ri*Math.cos(start);
+    var i2=cx+ri*Math.sin(start+angle), j2=cy-ri*Math.cos(start+angle);
+    var lg=angle>Math.PI?1:0;
+    var path='M '+i1+' '+j1+' L '+x1+' '+y1+' A '+ro+' '+ro+' 0 '+lg+' 1 '+x2+' '+y2+' L '+i2+' '+j2+' A '+ri+' '+ri+' 0 '+lg+' 0 '+i1+' '+j1+' Z';
+    var el=document.createElementNS('http://www.w3.org/2000/svg','path');
+    el.setAttribute('d',path); el.setAttribute('fill',m.col); el.setAttribute('opacity','0.82');
+    svg.appendChild(el);
+    legH+='<div class="dl"><div class="dl-lbl"><div class="dl-dot" style="background:'+m.col+'"></div>'+m.short+'</div><div class="dl-val" style="font-size:10px">₹'+m.rev+'L</div></div>';
+    start+=angle;
+  });
+  var txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+  txt.setAttribute('x',cx); txt.setAttribute('y',cy+2); txt.setAttribute('text-anchor','middle');
+  txt.setAttribute('fill','rgba(255,240,210,0.9)'); txt.setAttribute('font-size','9');
+  txt.setAttribute('font-family','Cabinet Grotesk,sans-serif'); txt.setAttribute('font-weight','700');
+  txt.textContent='₹91.2L';
+  svg.appendChild(txt);
+  leg.innerHTML=legH;
+}
+buildDonut();
+
+/* ═══════════════════════════════════════════
+   TREND SVG
+═══════════════════════════════════════════ */
+function buildTrend(){
+  var svg=document.getElementById('trendSvg'); if(!svg) return;
+  var W=640,H=130,pad=18;
+  var min=Math.min.apply(null,TREND)-5, max=Math.max.apply(null,TREND)+5;
+  var pts=TREND.map(function(v,i){ return [(i/(TREND.length-1))*(W-pad*2)+pad, H-pad-((v-min)/(max-min))*(H-pad*2)]; });
+  var tpts=TARGET.map(function(v,i){ return [(i/(TARGET.length-1))*(W-pad*2)+pad, H-pad-((v-min)/(max-min))*(H-pad*2)]; });
+  var polyS=pts.map(function(p){return p[0]+','+p[1]}).join(' ');
+  var areaS=pad+','+(H-pad)+' '+polyS+' '+(W-pad)+','+(H-pad);
+  var tpolyS=tpts.map(function(p){return p[0]+','+p[1]}).join(' ');
+  svg.innerHTML='<defs>'+
+    '<linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f97316" stop-opacity="0.22"/><stop offset="100%" stop-color="#f97316" stop-opacity="0"/></linearGradient>'+
+  '</defs>'+
+  '<polygon points="'+areaS+'" fill="url(#tg)"/>'+
+  '<polyline points="'+tpolyS+'" fill="none" stroke="rgba(255,220,150,0.2)" stroke-width="1.5" stroke-dasharray="5,4" stroke-linejoin="round"/>'+
+  '<polyline points="'+polyS+'" fill="none" stroke="#f97316" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+  pts.forEach(function(p,i){
+    svg.innerHTML+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="4" fill="#f97316" stroke="rgba(26,18,8,0.8)" stroke-width="1.5"/>'+
+      '<text x="'+p[0]+'" y="'+(p[1]-10)+'" text-anchor="middle" fill="rgba(255,230,180,0.55)" font-size="9" font-family="\'Jetbrains Mono\',monospace">'+TREND[i]+'L</text>';
+  });
+}
+buildTrend();
+
+/* ═══════════════════════════════════════════
+   GOAL RINGS
+═══════════════════════════════════════════ */
+function buildRing(id,pct,col){
+  var svg=document.getElementById(id); if(!svg) return;
+  var cx=40,cy=40,r=32,circ=2*Math.PI*r;
+  var dash=circ*Math.min(pct/100,1);
+  svg.innerHTML='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="rgba(255,220,150,0.07)" stroke-width="7"/>'+
+    '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="7" stroke-linecap="round"'+
+    ' stroke-dasharray="'+dash+' '+circ+'" transform="rotate(-90 '+cx+' '+cy+')"'+
+    ' style="filter:drop-shadow(0 0 6px '+col+'0.4)"/>';
+}
+buildRing('ring1',100,'#f97316');
+buildRing('ring2',72,'#2dd4bf');
+buildRing('ring3',88,'#86efac');
+buildRing('ring4',93,'#fbbf24');
+
+/* ═══════════════════════════════════════════
+   TEAM PAGE
+═══════════════════════════════════════════ */
+function buildTeamPage(){
+  var row=document.getElementById('teamKpiRow'); if(!row) return;
+  var kd=[
+    {l:'On Target ≥100%',v:EXECS.filter(function(e){return e.ach>=100}).length,c:'var(--green)'},
+    {l:'At Risk 75–99%',v:EXECS.filter(function(e){return e.ach>=75&&e.ach<100}).length,c:'var(--amber-l)'},
+    {l:'Critical <75%',v:EXECS.filter(function(e){return e.ach<75}).length,c:'var(--rose-d)'},
+    {l:'Avg Achievement',v:Math.round(EXECS.reduce(function(s,e){return s+e.ach},0)/EXECS.length)+'%',c:'var(--orange-l)'},
+    {l:'Total Clients',v:EXECS.reduce(function(s,e){return s+e.clients},0),c:'var(--teal)'},
+  ];
+  kd.forEach(function(k,i){
+    var d=document.createElement('div');
+    d.className='card card-p';
+    d.style.animationDelay=(i*.08)+'s';
+    d.innerHTML='<div class="stat-lbl">'+k.l+'</div><div class="stat-val" style="color:'+k.c+'">'+k.v+'</div>';
+    row.appendChild(d);
+  });
+
+  // Ach dist bars
+  var ab=document.getElementById('achDistBars'); if(!ab) return;
+  var sorted=EXECS.slice().sort(function(a,b){return b.ach-a.ach});
+  sorted.forEach(function(e){
+    var col=e.ach>=100?'var(--green)':e.ach>=75?'var(--amber-l)':'var(--rose-d)';
+    var w=Math.min(e.ach,160)/1.6;
+    ab.innerHTML+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">'+
+      '<div style="font-size:10px;color:var(--t2);width:72px;flex-shrink:0">'+e.name+'</div>'+
+      '<div style="flex:1;height:5px;background:rgba(255,220,150,0.06);border-radius:3px;overflow:hidden">'+
+        '<div style="width:'+w+'%;height:100%;background:'+col+';border-radius:3px"></div>'+
+      '</div>'+
+      '<div style="font-family:\'Jetbrains Mono\',monospace;font-size:9px;color:'+col+';width:32px;text-align:right">'+e.ach+'%</div>'+
+    '</div>';
+  });
+
+  // Velocity chart
+  var svg=document.getElementById('velSvg'); if(!svg) return;
+  var W=420,H=150,pad=20,vals=VEL;
+  var mn=Math.min.apply(null,vals)-15,mx=Math.max.apply(null,vals)+15;
+  var pts=vals.map(function(v,i){ return [(i/(vals.length-1))*(W-pad*2)+pad, H-pad-((v-mn)/(mx-mn))*(H-pad*2)]; });
+  var ps=pts.map(function(p){return p[0]+','+p[1]}).join(' ');
+  var as=pad+','+(H-pad)+' '+ps+' '+(W-pad)+','+(H-pad);
+  svg.innerHTML='<defs><linearGradient id="vg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2dd4bf" stop-opacity="0.2"/><stop offset="100%" stop-color="#2dd4bf" stop-opacity="0"/></linearGradient></defs>'+
+    '<polygon points="'+as+'" fill="url(#vg)"/>'+
+    '<polyline points="'+ps+'" fill="none" stroke="#2dd4bf" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+  pts.forEach(function(p,i){
+    svg.innerHTML+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="4" fill="#2dd4bf" stroke="rgba(26,18,8,0.8)" stroke-width="1.5"/>'+
+      '<text x="'+p[0]+'" y="'+(p[1]-10)+'" text-anchor="middle" fill="rgba(255,230,180,0.5)" font-size="9" font-family="\'Jetbrains Mono\',monospace">'+vals[i]+'</text>';
+  });
+
+  // Full leader
+  var t=document.getElementById('fullLead'); if(!t) return;
+  var s2=EXECS.slice().sort(function(a,b){return b.ach-a.ach});
+  t.innerHTML='<thead><tr><th>#</th><th>Executive</th><th>Manager</th><th>Revenue</th><th>Target</th><th>Ach%</th><th>Clients</th><th>Zone</th><th>Status</th></tr></thead>';
+  var tb='<tbody>';
+  s2.forEach(function(e,i){
+    var pc=e.ach>=100?'p-g':e.ach>=75?'p-y':'p-r';
+    var st=e.ach>=100?'On Track':e.ach>=75?'At Risk':'Critical';
+    var col=e.ach>=100?'var(--green)':e.ach>=75?'var(--amber-l)':'var(--rose-d)';
+    tb+='<tr>'+
+      '<td style="font-family:\'Jetbrains Mono\',monospace;color:var(--t3)">'+(i+1)+'</td>'+
+      '<td>'+e.name+'</td>'+
+      '<td style="font-size:10px;color:var(--t3)">'+e.mgr+'</td>'+
+      '<td style="font-family:\'Jetbrains Mono\',monospace;color:var(--amber-l)">₹'+e.rev+'L</td>'+
+      '<td style="font-family:\'Jetbrains Mono\',monospace;color:var(--t3)">₹'+e.tgt+'L</td>'+
+      '<td style="color:'+col+';font-family:\'Jetbrains Mono\',monospace">'+e.ach+'%</td>'+
+      '<td style="font-family:\'Jetbrains Mono\',monospace">'+e.clients+'</td>'+
+      '<td style="font-size:10px;color:var(--t3)">'+e.zone+'</td>'+
+      '<td><span class="pill '+pc+'">'+st+'</span></td>'+
+    '</tr>';
+  });
+  t.innerHTML+=tb+'</tbody>';
+}
+buildTeamPage();
+
+/* ═══════════════════════════════════════════
+   MANAGER PAGE
+═══════════════════════════════════════════ */
+function buildMgrPage(){
+  var kr=document.getElementById('mgrKpiRow'); if(!kr) return;
+  MGRS.forEach(function(m,i){
+    var d=document.createElement('div');
+    d.className='card card-p'; d.style.animationDelay=(i*.08)+'s';
+    d.innerHTML='<div class="stat-lbl">'+m.name+'</div>'+
+      '<div class="stat-val" style="color:'+m.col+'">₹'+m.rev+'L</div>'+
+      '<div class="stat-sub"><span class="delta d-up">'+m.ach+'%</span> achievement</div>'+
+      '<div class="track"><div class="track-fill" style="width:'+Math.min(m.ach/130*100,100)+'%;background:'+m.col+'"></div></div>';
+    kr.appendChild(d);
+  });
+  var dg=document.getElementById('mgrDetailGrid'); if(!dg) return;
+  MGRS.forEach(function(m){
+    var me=EXECS.filter(function(e){return e.mgr===m.name.split(' ')[0]});
+    var card=document.createElement('div'); card.className='card card-p';
+    var rows='';
+    me.forEach(function(e){
+      var col=e.ach>=100?'var(--green)':e.ach>=75?'var(--amber-l)':'var(--rose-d)';
+      var w=Math.min(e.ach,150)/1.5;
+      rows+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">'+
+        '<div style="font-size:11px;color:var(--t2);width:68px;flex-shrink:0">'+e.name+'</div>'+
+        '<div style="flex:1;height:5px;background:rgba(255,220,150,0.06);border-radius:2px;overflow:hidden">'+
+          '<div style="width:'+w+'%;height:100%;background:'+col+';border-radius:2px"></div>'+
+        '</div>'+
+        '<div style="font-family:\'Jetbrains Mono\',monospace;font-size:9px;color:'+col+';width:30px;text-align:right">'+e.ach+'%</div>'+
+      '</div>';
+    });
+    card.innerHTML=
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'+
+        '<div style="width:38px;height:38px;border-radius:12px;background:'+m.bg+';border:1px solid '+m.col+'40;display:flex;align-items:center;justify-content:center;font-family:Cabinet Grotesk,sans-serif;font-weight:800;font-size:14px;color:'+m.col+'">'+m.short+'</div>'+
+        '<div>'+
+          '<div style="font-family:Cabinet Grotesk,sans-serif;font-size:13.5px;font-weight:800;color:var(--t1)">'+m.name+'</div>'+
+          '<div style="font-size:9px;color:var(--t3);font-family:\'Jetbrains Mono\',monospace">Team '+m.team+' · 6 Execs · '+m.ach+'%</div>'+
+        '</div>'+
+        '<div style="margin-left:auto;font-family:Cabinet Grotesk,sans-serif;font-size:20px;font-weight:900;color:'+m.col+'">₹'+m.rev+'L</div>'+
+      '</div>'+rows;
+    dg.appendChild(card);
+  });
+}
+buildMgrPage();
+
+/* ═══════════════════════════════════════════
+   ZONE BARS
+═══════════════════════════════════════════ */
+function buildZoneBars(){
+  var c=document.getElementById('zoneBars'); if(!c) return;
+  var zones=[
+    {n:'Whitefield–KR Puram',r:22.4,col:'#f97316'},
+    {n:'Indiranagar–Koramangala',r:19.8,col:'#2dd4bf'},
+    {n:'Hebbal–Yelahanka',r:18.2,col:'#fbbf24'},
+    {n:'JP Nagar–Bannerghatta',r:16.6,col:'#d8b4fe'},
+    {n:'Rajajinagar–Yeshwanthpur',r:14.2,col:'#f87171'},
+  ];
+  zones.forEach(function(z){
+    c.innerHTML+='<div style="margin-bottom:10px">'+
+      '<div style="display:flex;justify-content:space-between;margin-bottom:3px">'+
+        '<span style="font-size:10px;color:var(--t2)">'+z.n+'</span>'+
+        '<span style="font-family:\'Jetbrains Mono\',monospace;font-size:10px;color:var(--amber-l)">₹'+z.r+'L</span>'+
+      '</div>'+
+      '<div style="height:5px;background:rgba(255,220,150,0.06);border-radius:3px;overflow:hidden">'+
+        '<div style="width:'+(z.r/22.4*100)+'%;height:100%;background:'+z.col+';border-radius:3px"></div>'+
+      '</div>'+
+    '</div>';
+  });
+}
+buildZoneBars();
+
+/* ═══════════════════════════════════════════
+   LEAFLET MAP
+═══════════════════════════════════════════ */
+var mapInited=false;
+function initMap(){
+  if(mapInited) return; mapInited=true;
+  var map=L.map('blr-map',{zoomControl:true,scrollWheelZoom:false}).setView([12.9716,77.5946],11);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'© OpenStreetMap © Carto',maxZoom:19
+  }).addTo(map);
+  var zones=[
+    {n:'Whitefield–KR Puram',   lat:12.9698,lng:77.7499,r:'₹22.4L',col:'#f97316',ex:12},
+    {n:'Indiranagar–Koramangala',lat:12.9716,lng:77.6408,r:'₹19.8L',col:'#2dd4bf',ex:12},
+    {n:'Hebbal–Yelahanka',       lat:13.0358,lng:77.5970,r:'₹18.2L',col:'#fbbf24',ex:12},
+    {n:'JP Nagar–Bannerghatta',  lat:12.9012,lng:77.5949,r:'₹16.6L',col:'#d8b4fe',ex:12},
+    {n:'Rajajinagar–Yeshwanthpur',lat:12.9914,lng:77.5510,r:'₹14.2L',col:'#f87171',ex:6},
+  ];
+  zones.forEach(function(z){
+    L.circle([z.lat,z.lng],{radius:2400,color:z.col,fillColor:z.col,fillOpacity:.16,weight:2})
+      .addTo(map)
+      .bindPopup(
+        '<div style="font-family:Cabinet Grotesk,sans-serif;font-size:14px;font-weight:800;color:#fff5e0">'+z.n+'</div>'+
+        '<div style="font-family:\'Jetbrains Mono\',monospace;font-size:11px;color:'+z.col+';margin-top:4px">'+z.r+' · '+z.ex+' execs</div>'
+      );
+    var icon=L.divIcon({
+      html:'<div style="width:12px;height:12px;border-radius:50%;background:'+z.col+';border:2px solid rgba(255,255,255,.4);box-shadow:0 0 12px '+z.col+'"></div>',
+      className:'',iconSize:[12,12],iconAnchor:[6,6]
+    });
+    L.marker([z.lat,z.lng],{icon:icon}).addTo(map);
+  });
+}
+
+/* ═══════════════════════════════════════════
+   AI AGENT
+═══════════════════════════════════════════ */
+var CONTEXT="You are an elite AI Revenue Operations analyst embedded in a C-suite dashboard for a B2B branch in West Bangalore, India. You have real-time access to all branch data.\n\n"+
+"BRANCH: West Bangalore · Q2 FY2026 · June 2026\n"+
+"REVENUE: ₹91.2 Lakhs (Target ₹80L) · Achievement: 114% · MoM growth: 14%\n"+
+"TEAM: 30 Sales Executives across 5 Manager teams\n"+
+"CLIENTS: 217 paid clients won this month (+23 new)\n"+
+"COCA: ₹21,400 (down 8% from ₹23,200 in May)\n"+
+"CONVERSION: 38.4% overall (up 5.2 pts from Q1)\n"+
+"LEAKAGE: 2 zero-sale execs out of 30 (6.7%)\n"+
+"AVG SALE PRICE: ₹42,000\n"+
+"REV PER EXEC: ₹3.04L\n\n"+
+"MANAGERS:\n"+
+"1. Arjun Rao (Team Alpha, 6 execs) — ₹19.8L, 128% | Top exec: Vikram S 142%\n"+
+"2. Priya Krishnan (Team Beta, 6 execs) — ₹18.4L, 119% | Top exec: Rohan G 136%\n"+
+"3. Sanjay Kumar (Team Gamma, 6 execs) — ₹17.6L, 114% | Top exec: Nikhil R 131%\n"+
+"4. Neha Verma (Team Delta, 6 execs) — ₹16.2L, 105% | Top exec: Ganesh B 122% | Risk: Rekha J 62%\n"+
+"5. Ravi Teja (Team Epsilon, 6 execs) — ₹19.2L, 124% | Top exec: Sunil V 139%\n\n"+
+"PIPELINE: 565 leads → 474 connected (84%) → 318 demo (56%) → 217 paid (38.4%)\n"+
+"AVG DEMO-TO-CLOSE: 3.8 days\n\n"+
+"TERRITORIES (Revenue):\n"+
+"Whitefield–KR Puram: ₹22.4L (24.6% of branch)\n"+
+"Indiranagar–Koramangala: ₹19.8L\n"+
+"Hebbal–Yelahanka: ₹18.2L\n"+
+"JP Nagar–Bannerghatta: ₹16.6L (growing 18% MoM)\n"+
+"Rajajinagar–Yeshwanthpur: ₹14.2L (under-penetrated)\n\n"+
+"Respond as a sharp, data-driven RevOps strategist. Be concise, specific, and executive-ready. Use bullet points for lists. Cite exact numbers. End with a clear action recommendation.";
+
+var chat=[];
+async function sendMsg(){
+  var inp=document.getElementById('agentInput');
+  var msg=inp.value.trim(); if(!msg) return;
+  inp.value='';
+  appendMsg('user',msg);
+  chat.push({role:'user',content:msg});
+  document.getElementById('agentSend').disabled=true;
+  var tid=appendTyping();
+  try{
+    var res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        system:CONTEXT,
+        messages:chat
+      })
+    });
+    var data=await res.json();
+    removeTyping(tid);
+    var reply=(data.content&&data.content[0])?data.content[0].text:'No response.';
+    chat.push({role:'assistant',content:reply});
+    appendMsg('ai',reply);
+  }catch(e){
+    removeTyping(tid);
+    appendMsg('ai','⚠️ Connection error — please check API access and retry.');
+  }
+  document.getElementById('agentSend').disabled=false;
+}
+function sq(q){ document.getElementById('agentInput').value=q; sendMsg(); }
+function handleKey(e){ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();} }
+
+function appendMsg(role,text){
+  var msgs=document.getElementById('agentMsgs');
+  var d=document.createElement('div'); d.className='msg '+role;
+  var av=role==='ai'?'✦':'◎';
+  var fmt=text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\n/g,'<br>')
+    .replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--t1)">$1</strong>')
+    .replace(/•/g,'<span style="color:var(--orange-l)">•</span>');
+  d.innerHTML='<div class="msg-av">'+av+'</div><div class="msg-bbl">'+fmt+'</div>';
+  msgs.appendChild(d);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+var tc=0;
+function appendTyping(){
+  var id='ty-'+(++tc);
+  var msgs=document.getElementById('agentMsgs');
+  var d=document.createElement('div'); d.className='msg ai'; d.id=id;
+  d.innerHTML='<div class="msg-av">✦</div><div class="msg-bbl"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
+  msgs.appendChild(d); msgs.scrollTop=msgs.scrollHeight;
+  return id;
+}
+function removeTyping(id){ var el=document.getElementById(id); if(el) el.remove(); }
+</script>
+</body>
+</html>
